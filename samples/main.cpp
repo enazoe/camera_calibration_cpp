@@ -15,4 +15,5 @@ int main()
 
 	CameraCalibrator m;
 	m.set_input(vec_mat, cv::Size{ 9,6 });
+	m.get_result();
 }
