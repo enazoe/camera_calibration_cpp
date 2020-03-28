@@ -69,6 +69,7 @@
     <Import Project="..\..\props\opencv412_release_x64.props" />
     <Import Project="..\..\props\console_debug_release_x64 .props" />
     <Import Project="..\..\props\eigen3.props" />
+    <Import Project="..\..\props\ceres_release_x64.props" />
   </ImportGroup>
   <PropertyGroup Label="UserMacros" />
   <PropertyGroup />
