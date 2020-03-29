@@ -66,10 +66,12 @@
   </ImportGroup>
   <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
-    <Import Project="..\..\props\opencv412_release_x64.props" />
     <Import Project="..\..\props\console_debug_release_x64 .props" />
-    <Import Project="..\..\props\eigen3.props" />
     <Import Project="..\..\props\ceres_release_x64.props" />
+    <Import Project="..\..\props\opencv330_release_x64.props" />
+    <Import Project="..\..\props\glog_release_x64.props" />
+    <Import Project="..\..\props\eigen3.props" />
+    <Import Project="..\..\props\gflags.props" />
   </ImportGroup>
   <PropertyGroup Label="UserMacros" />
   <PropertyGroup />
@@ -114,10 +116,13 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <ClCompile Include="..\..\samples\main.cpp" />
+    <ClInclude Include="..\..\modules\class_camera_calibrator.hpp" />
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="..\..\modules\class_camera_calibrator.hpp" />
+    <ClCompile Include="..\..\samples\libmv_homography.cc">
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\..\samples\main.cpp" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
