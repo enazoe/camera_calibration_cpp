@@ -145,11 +145,12 @@ private:
 			{
 				Eigen::Vector4d houm_coor(_boards_pts[i][j].x, _boards_pts[i][j].y, 0, 1);
 				Eigen::Vector3d uv = camera_matrix_*vec_extrinsics_[i] * houm_coor;
-				Eigen::Vector2d uv_estim(uv(0) / uv(2), uv(0) / uv(2));
+				Eigen::Vector2d uv_estim(uv(0) / uv(2), uv(1) / uv(2));
 
 				Eigen::Vector3d coor_norm = vec_extrinsics_[i] * houm_coor;
 				coor_norm /= coor_norm(2);
-				double r = coor_norm.norm();
+				Eigen::Vector2d v_r(coor_norm(0), coor_norm(1));
+				double r = v_r.norm();
 
 				Eigen::RowVector2d vu((uv_estim(0) - uc)*r*r, (uv_estim(0) - uc)*r*r*r*r);
 				D.conservativeResize(D.rows() + 1, 2);
@@ -164,9 +165,11 @@ private:
 				d(d.size() - 1) = _imgs_pts[i][j].y - uv_estim(1);
 			}
 		}
-
-		Eigen::VectorXd temp = ((D.transpose()*D).inverse())*D.transpose();
+		Eigen::MatrixXd DTD = D.transpose()*D;
+		Eigen::MatrixXd temp = (DTD.inverse())*D.transpose();
 		k_ = temp*d;
+		std::cout<<"k:\n"<<k_<<std::endl;
+		std::cin.get();
 	}
 
 	void get_extrinsics(const std::vector<Eigen::Matrix3d> &vec_h_,
@@ -185,13 +188,13 @@ private:
 			Eigen::Vector3d t  = scalar_factor * inv_camera_matrix*vec_h_[i].col(2);
 			Eigen::Vector3d r2 = r0.cross(r1);
 
-			Eigen::MatrixXd RT = Eigen::Matrix4d::Identity(3,4);
+			Eigen::MatrixXd RT(3,4);
 			RT.block<3,1>(0,0) = r0;
 			RT.block<3,1>(0,1) = r1;
 			RT.block<3,1>(0,2) = r2;
 			RT.block<3,1>(0,3) = t;
 			vec_extrinsics_.push_back(RT);
-			std::cin.get();
+			//std::cout<<"RT:\n"<<RT<<std::endl;
 		}
 	}
 
@@ -237,7 +240,7 @@ private:
 		double	d = b[0] * b[2] - b[1] * b[1];
 
 		double	alpha = std::sqrt(w / (d * b[0]));
-		double	beta = std::sqrt(w / d*d * b[0]);
+		double	beta = std::sqrt(w / (d*d) * b[0]);
 		double	gamma = std::sqrt(w / (d*d * b[0])) * b[1];
 		double	uc = (b[1] * b[4] - b[2] * b[3]) / d;
 		double	vc = (b[1] * b[3] - b[0] * b[4]) / d;
@@ -245,8 +248,8 @@ private:
 		camera_matrix_ << alpha, gamma, uc,
 			0, beta, vc,
 			0, 0, 1;
-	//	LOG(INFO) << "camera_matrix_:" << camera_matrix_ << std::endl;
-		//std::cin.get();
+		LOG(INFO) << "camera_matrix_:\n" << camera_matrix_ << std::endl;
+	//	std::cin.get();
 	}
 
 
@@ -257,7 +260,9 @@ private:
 		{
 			Eigen::Matrix3d ini_H,refined_H;
 			this->estimate_H(_imgs_pts[i], _boards_pts[i], ini_H);
+		//	std::cout << "ini H:\n" << ini_H << std::endl;
 			this->refine_H(_imgs_pts[i], _boards_pts[i], ini_H,refined_H);
+	//		std::cout << "refine H:\n" << refined_H << std::endl;
 			vec_h_.push_back(refined_H);
 		}
 	}
@@ -348,12 +353,12 @@ private:
 		for (int i=0;i<board_pts_.size();++i)
 		{
 			x1(0, i) = board_pts_[i].x;
-			x1(1, i) = board_pts_[i].x;
+			x1(1, i) = board_pts_[i].y;
 		}
 		for (int i = 0; i < img_pts_.size(); ++i)
 		{
 			x2(0, i) = img_pts_[i].x;
-			x2(1, i) = img_pts_[i].x;
+			x2(1, i) = img_pts_[i].y;
 		}
 
 		
