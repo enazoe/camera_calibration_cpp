@@ -11,7 +11,7 @@
 
 #include <ceres/ceres.h>
 
-
+#include "class_nonlinear_optimizer.hpp"
 typedef Eigen::MatrixXd Mat;
 typedef Eigen::VectorXd Vec;
 typedef Eigen::Matrix<double, 3, 3> Mat3;
@@ -130,6 +130,20 @@ public:
 	}
 
 private:
+
+	void refine_all(Eigen::Matrix3d &camera_matrix_,
+		Eigen::VectorXd &k_,
+		std::vector<Eigen::MatrixXd> &vec_extrinsics_)
+	{
+		Params params,params_refined;
+		params.camera_matrix = camera_matrix_;
+		params.k=k_;
+		params.vec_rt=vec_extrinsics_;
+		NonlinearOptimizer optimier;
+		optimier.refine_all_camera_params(params, _imgs_pts,
+			_boards_pts, params_refined);
+
+	}
 
 	void get_distortion(const Eigen::Matrix3d &camera_matrix_,
 		const std::vector<Eigen::MatrixXd> &vec_extrinsics_,
