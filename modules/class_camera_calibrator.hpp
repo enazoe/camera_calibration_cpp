@@ -6,55 +6,61 @@
 #include <opencv2/calib3d/calib3d.hpp>
 #include <opencv2/highgui/highgui.hpp>
 #include <opencv2/imgproc/imgproc.hpp>
-
 //#include <Eigen/Dense>
 
+#ifdef _MSC_VER
+#define GLOG_NO_ABBREVIATED_SEVERITIES
+#include <windows.h>
+#endif
+
+#include <gflags/gflags.h>
+#include <glog/logging.h>
 #include <ceres/ceres.h>
 
 #include "class_nonlinear_optimizer.hpp"
-typedef Eigen::MatrixXd Mat;
-typedef Eigen::VectorXd Vec;
-typedef Eigen::Matrix<double, 3, 3> Mat3;
-typedef Eigen::Matrix<double, 2, 1> Vec2;
-typedef Eigen::Matrix<double, Eigen::Dynamic, 8> MatX8;
-typedef Eigen::Vector3d Vec3;
-template <typename T>
-void SymmetricGeometricDistanceTerms(const Eigen::Matrix<T, 3, 3> &H,
-	const Eigen::Matrix<T, 2, 1> &x1,
-	const Eigen::Matrix<T, 2, 1> &x2,
-	T forward_error[2],
-	T backward_error[2]) {
-	typedef Eigen::Matrix<T, 3, 1> Vec3;
-	Vec3 x(x1(0), x1(1), T(1.0));
-	Vec3 y(x2(0), x2(1), T(1.0));
-
-	Vec3 H_x = H * x;
-	Vec3 Hinv_y = H.inverse() * y;
-
-	H_x /= H_x(2);
-	Hinv_y /= Hinv_y(2);
-
-	forward_error[0] = H_x(0) - y(0);
-	forward_error[1] = H_x(1) - y(1);
-	backward_error[0] = Hinv_y(0) - x(0);
-	backward_error[1] = Hinv_y(1) - x(1);
-}
-// Calculate symmetric geometric cost:
+//typedef Eigen::MatrixXd Mat;
+//typedef Eigen::VectorXd Vec;
+//typedef Eigen::Matrix<double, 3, 3> Mat3;
+//typedef Eigen::Matrix<double, 2, 1> Vec2;
+//typedef Eigen::Matrix<double, Eigen::Dynamic, 8> MatX8;
+//typedef Eigen::Vector3d Vec3;
+//template <typename T>
+//void SymmetricGeometricDistanceTerms(const Eigen::Matrix<T, 3, 3> &H,
+//	const Eigen::Matrix<T, 2, 1> &x1,
+//	const Eigen::Matrix<T, 2, 1> &x2,
+//	T forward_error[2],
+//	T backward_error[2]) {
+//	typedef Eigen::Matrix<T, 3, 1> Vec3;
+//	Vec3 x(x1(0), x1(1), T(1.0));
+//	Vec3 y(x2(0), x2(1), T(1.0));
 //
-//   D(H * x1, x2)^2 + D(H^-1 * x2, x1)^2
+//	Vec3 H_x = H * x;
+//	Vec3 Hinv_y = H.inverse() * y;
 //
-double SymmetricGeometricDistance(const Mat3 &H,
-	const Vec2 &x1,
-	const Vec2 &x2) {
-	Vec2 forward_error, backward_error;
-	SymmetricGeometricDistanceTerms<double>(H,
-		x1,
-		x2,
-		forward_error.data(),
-		backward_error.data());
-	return forward_error.squaredNorm() +
-		backward_error.squaredNorm();
-}
+//	H_x /= H_x(2);
+//	Hinv_y /= Hinv_y(2);
+//
+//	forward_error[0] = H_x(0) - y(0);
+//	forward_error[1] = H_x(1) - y(1);
+//	backward_error[0] = Hinv_y(0) - x(0);
+//	backward_error[1] = Hinv_y(1) - x(1);
+//}
+//// Calculate symmetric geometric cost:
+////
+////   D(H * x1, x2)^2 + D(H^-1 * x2, x1)^2
+////
+//double SymmetricGeometricDistance(const Mat3 &H,
+//	const Vec2 &x1,
+//	const Vec2 &x2) {
+//	Vec2 forward_error, backward_error;
+//	SymmetricGeometricDistanceTerms<double>(H,
+//		x1,
+//		x2,
+//		forward_error.data(),
+//		backward_error.data());
+//	return forward_error.squaredNorm() +
+//		backward_error.squaredNorm();
+//}
 class CameraCalibrator
 {
 public:
@@ -65,71 +71,77 @@ public:
 		_imgs_pts.clear();
 		for (const auto &img : vec_mat_)
 		{
-			cv::Mat mat_gray;// = cv::Mat::zeros(img.size(), CV_8UC1);
+			CHECK(1 == img.channels()) << "images must be gray";
 			std::vector<cv::Point2f> corner_pts;
-			if (3 == img.channels())
-			{
-				cv::cvtColor(img, mat_gray, cv::COLOR_BGR2GRAY);
-			}
-			else
-			{
-				img.copyTo(mat_gray);
-			}
-			int found = cv::findChessboardCorners(mat_gray, chessboard_size_, corner_pts,
+			int found = cv::findChessboardCorners(img, chessboard_size_, corner_pts,
 				cv::CALIB_CB_ADAPTIVE_THRESH|cv::CALIB_CB_FAST_CHECK | cv::CALIB_CB_NORMALIZE_IMAGE);
 			if (!found)
 			{
 				continue;				
 			}
 			cv::TermCriteria criteria(2, 30, 0.001);
-			cv::cornerSubPix(mat_gray, corner_pts, chessboard_size_, cv::Size(-1, -1), criteria);
+			cv::cornerSubPix(img, corner_pts, chessboard_size_, cv::Size(-1, -1), criteria);
 			//images coordinate points
 			_imgs_pts.push_back(corner_pts);
-
 			//chessboard coordinate points
-			std::vector<cv::Point2f> vec_points;
-			for (int r=0;r<chessboard_size_.height;++r)
-			{
-				for (int c=0;c<chessboard_size_.width;++c)
-				{
-					vec_points.emplace_back(c,r);
-				}
-			}
-			_boards_pts.push_back(vec_points);
-
-			if (!_b_disp_corners)
-			{
-				continue;
-			}
-
-			cv::Mat frame;
-			if (1 == img.channels())
-			{
-				cv::cvtColor(img, frame, cv::COLOR_GRAY2BGR);
-			}
-			else
-			{
-				img.copyTo(frame);
-			}
-			cv::drawChessboardCorners(frame, chessboard_size_, corner_pts, found);
-			cv::imshow("Image", frame);
-			cv::waitKey(0);
+			this->make_board_points(chessboard_size_);
+			this->disp_corners(img, chessboard_size_, corner_pts, found);
 		}
 	}
 
-	void get_result()
+	void get_result(Eigen::Matrix3d &camera_matrix_,
+		Eigen::VectorXd &k_,
+		std::vector<Eigen::MatrixXd> &vec_extrinsics_)
 	{
 		std::vector<Eigen::Matrix3d> vec_h;
 		this->get_homography(vec_h);
-		Eigen::Matrix3d camera_matrix;
-		this->get_camera_instrinsics(vec_h, camera_matrix);
-		std::vector<Eigen::MatrixXd> vec_extrinsics;
-		this->get_extrinsics(vec_h, camera_matrix, vec_extrinsics);
-		Eigen::VectorXd k;
-		this->get_distortion(camera_matrix, vec_extrinsics, k);
+
+		this->get_camera_instrinsics(vec_h, camera_matrix_);
+
+		this->get_extrinsics(vec_h, camera_matrix_, vec_extrinsics_);
+
+		this->get_distortion(camera_matrix_, vec_extrinsics_, k_);
+
+		this->refine_all(camera_matrix_, k_, vec_extrinsics_);
 	}
 
 private:
+
+	void make_board_points(const cv::Size  &chessboard_size_)
+	{
+		std::vector<cv::Point2f> vec_points;
+		for (int r = 0; r < chessboard_size_.height; ++r)
+		{
+			for (int c = 0; c < chessboard_size_.width; ++c)
+			{
+				vec_points.emplace_back(c, r);
+			}
+		}
+		_boards_pts.push_back(vec_points);
+	}
+
+	void disp_corners(const cv::Mat &img,
+		const cv::Size  &chessboard_size_,
+		std::vector<cv::Point2f> corner_pts,
+		int found)
+	{
+		if (!_b_disp_corners)
+		{
+			return;
+		}
+		cv::Mat frame;
+		if (1 == img.channels())
+		{
+			cv::cvtColor(img, frame, cv::COLOR_GRAY2BGR);
+		}
+		else
+		{
+			img.copyTo(frame);
+		}
+		cv::drawChessboardCorners(frame, chessboard_size_, corner_pts, found);
+		cv::imshow("Image", frame);
+		cv::waitKey(0);
+	}
 
 	void refine_all(Eigen::Matrix3d &camera_matrix_,
 		Eigen::VectorXd &k_,
@@ -139,10 +151,11 @@ private:
 		params.camera_matrix = camera_matrix_;
 		params.k=k_;
 		params.vec_rt=vec_extrinsics_;
-		NonlinearOptimizer optimier;
 		optimier.refine_all_camera_params(params, _imgs_pts,
 			_boards_pts, params_refined);
-
+		camera_matrix_ = params_refined.camera_matrix;
+		k_ = params_refined.k;
+		vec_extrinsics_ = params_refined.vec_rt;
 	}
 
 	void get_distortion(const Eigen::Matrix3d &camera_matrix_,
@@ -182,8 +195,6 @@ private:
 		Eigen::MatrixXd DTD = D.transpose()*D;
 		Eigen::MatrixXd temp = (DTD.inverse())*D.transpose();
 		k_ = temp*d;
-		std::cout<<"k:\n"<<k_<<std::endl;
-		std::cin.get();
 	}
 
 	void get_extrinsics(const std::vector<Eigen::Matrix3d> &vec_h_,
@@ -208,7 +219,6 @@ private:
 			RT.block<3,1>(0,2) = r2;
 			RT.block<3,1>(0,3) = t;
 			vec_extrinsics_.push_back(RT);
-			//std::cout<<"RT:\n"<<RT<<std::endl;
 		}
 	}
 
@@ -238,17 +248,14 @@ private:
 		for (int n = 0; n < N; ++n)
 		{
 			Eigen::RowVectorXd v01(6),v00(6), v11(6);
-		//	std::cout << "h[" << n << "]:" << vec_h_[n] << std::endl;
 			create_v(vec_h_[n], 0, 1, v01);
 			V.row(2*n) = v01;
 			create_v(vec_h_[n], 0, 0, v00);
 			create_v(vec_h_[n], 1, 1, v11);
 			V.row(2*n + 1) = v00 - v11;
 		}
-	//	std::cout << "V:" << V << std::endl;
 		Eigen::JacobiSVD<Eigen::MatrixXd> svd(V, Eigen::ComputeFullV);
 		Eigen::VectorXd b = svd.matrixV().col(5);
-	//	std::cout << "b:" << b << std::endl;
 		//求取相机内参
 		double	w = b[0] * b[2] * b[5] - b[1] * b[1] * b[5] - b[0] * b[4] * b[4] + 2 * b[1] * b[3] * b[4] - b[2] * b[3] * b[3];
 		double	d = b[0] * b[2] - b[1] * b[1];
@@ -262,8 +269,7 @@ private:
 		camera_matrix_ << alpha, gamma, uc,
 			0, beta, vc,
 			0, 0, 1;
-		LOG(INFO) << "camera_matrix_:\n" << camera_matrix_ << std::endl;
-	//	std::cin.get();
+		DLOG(INFO) << "rough camera_matrix :\n" << camera_matrix_ << std::endl;
 	}
 
 
@@ -274,9 +280,7 @@ private:
 		{
 			Eigen::Matrix3d ini_H,refined_H;
 			this->estimate_H(_imgs_pts[i], _boards_pts[i], ini_H);
-		//	std::cout << "ini H:\n" << ini_H << std::endl;
-			this->refine_H(_imgs_pts[i], _boards_pts[i], ini_H,refined_H);
-	//		std::cout << "refine H:\n" << refined_H << std::endl;
+			optimier.refine_H(_imgs_pts[i], _boards_pts[i], ini_H,refined_H);
 			vec_h_.push_back(refined_H);
 		}
 	}
@@ -356,170 +360,166 @@ private:
 	}
 
 	//根据投影误差，LM算法对H进行优化
-	void refine_H(const std::vector<cv::Point2f> &img_pts_,
-				  const std::vector<cv::Point2f> &board_pts_,
-				  const Eigen::Matrix3d &matrix_H_,
-				  Eigen::Matrix3d &refined_H_)
-	{
-		Mat x1(2, board_pts_.size());
-		Mat x2(2, img_pts_.size());
+	//void refine_H(const std::vector<cv::Point2f> &img_pts_,
+	//			  const std::vector<cv::Point2f> &board_pts_,
+	//			  const Eigen::Matrix3d &matrix_H_,
+	//			  Eigen::Matrix3d &refined_H_)
+	//{
+	//	Mat x1(2, board_pts_.size());
+	//	Mat x2(2, img_pts_.size());
 
-		for (int i=0;i<board_pts_.size();++i)
-		{
-			x1(0, i) = board_pts_[i].x;
-			x1(1, i) = board_pts_[i].y;
-		}
-		for (int i = 0; i < img_pts_.size(); ++i)
-		{
-			x2(0, i) = img_pts_[i].x;
-			x2(1, i) = img_pts_[i].y;
-		}
+	//	for (int i=0;i<board_pts_.size();++i)
+	//	{
+	//		x1(0, i) = board_pts_[i].x;
+	//		x1(1, i) = board_pts_[i].y;
+	//	}
+	//	for (int i = 0; i < img_pts_.size(); ++i)
+	//	{
+	//		x2(0, i) = img_pts_[i].x;
+	//		x2(1, i) = img_pts_[i].y;
+	//	}
 
-		
-		Mat3 H = matrix_H_;
-		//std::cout << "H:" << H<< std::endl;
-		// Step 2: Refine matrix using Ceres minimizer.
-		ceres::Problem problem;
-		for (int i = 0; i < x1.cols(); i++) {
-			HomographySymmetricGeometricCostFunctor
-				*homography_symmetric_geometric_cost_function =
-				new HomographySymmetricGeometricCostFunctor(x1.col(i),
-					x2.col(i));
+	//	
+	//	Mat3 H = matrix_H_;
+	//	//std::cout << "H:" << H<< std::endl;
+	//	// Step 2: Refine matrix using Ceres minimizer.
+	//	ceres::Problem problem;
+	//	for (int i = 0; i < x1.cols(); i++) {
+	//		HomographySymmetricGeometricCostFunctor
+	//			*homography_symmetric_geometric_cost_function =
+	//			new HomographySymmetricGeometricCostFunctor(x1.col(i),
+	//				x2.col(i));
 
-			problem.AddResidualBlock(
-				new ceres::AutoDiffCostFunction<
-				HomographySymmetricGeometricCostFunctor,
-				4,  // num_residuals
-				9>(homography_symmetric_geometric_cost_function),
-				NULL,
-				H.data());
-		}
-		EstimateHomographyOptions options;
-		options.expected_average_symmetric_distance = 0.02;
-		// Configure the solve.
-		ceres::Solver::Options solver_options;
-		solver_options.linear_solver_type = ceres::DENSE_QR;
-		solver_options.max_num_iterations = options.max_num_iterations;
-		solver_options.update_state_every_iteration = true;
+	//		problem.AddResidualBlock(
+	//			new ceres::AutoDiffCostFunction<
+	//			HomographySymmetricGeometricCostFunctor,
+	//			4,  // num_residuals
+	//			9>(homography_symmetric_geometric_cost_function),
+	//			NULL,
+	//			H.data());
+	//	}
+	//	EstimateHomographyOptions options;
+	//	options.expected_average_symmetric_distance = 0.02;
+	//	// Configure the solve.
+	//	ceres::Solver::Options solver_options;
+	//	solver_options.linear_solver_type = ceres::DENSE_QR;
+	//	solver_options.max_num_iterations = options.max_num_iterations;
+	//	solver_options.update_state_every_iteration = true;
 
-		// Terminate if the average symmetric distance is good enough.
-		TerminationCheckingCallback callback(x1, x2, options, &H);
-		solver_options.callbacks.push_back(&callback);
+	//	// Terminate if the average symmetric distance is good enough.
+	//	TerminationCheckingCallback callback(x1, x2, options, &H);
+	//	solver_options.callbacks.push_back(&callback);
 
-		// Run the solve.
-		ceres::Solver::Summary summary;
-		ceres::Solve(solver_options, &problem, &summary);
+	//	// Run the solve.
+	//	ceres::Solver::Summary summary;
+	//	ceres::Solve(solver_options, &problem, &summary);
 
-		//LOG(INFO) << "Summary:\n" << summary.FullReport();
-		
-		
-		refined_H_ = H / H(2, 2);
-	//	LOG(INFO) << "\nFinal refined matrix:\n" << refined_H_;
-	//	std::cin.get();
-	}
+	//	refined_H_ = H / H(2, 2);
+	//}
 
 private:
-	
-	struct EstimateHomographyOptions {
-		// Default settings for homography estimation which should be suitable
-		// for a wide range of use cases.
-		EstimateHomographyOptions()
-			: max_num_iterations(50),
-			expected_average_symmetric_distance(1e-16) {}
-
-		// Maximal number of iterations for the refinement step.
-		int max_num_iterations;
-
-		// Expected average of symmetric geometric distance between
-		// actual destination points and original ones transformed by
-		// estimated homography matrix.
-		//
-		// Refinement will finish as soon as average of symmetric
-		// geometric distance is less or equal to this value.
-		//
-		// This distance is measured in the same units as input points are.
-		double expected_average_symmetric_distance;
-	};
-	
-
-	// Termination checking callback. This is needed to finish the
-	// optimization when an absolute error threshold is met, as opposed
-	// to Ceres's function_tolerance, which provides for finishing when
-	// successful steps reduce the cost function by a fractional amount.
-	// In this case, the callback checks for the absolute average reprojection
-	// error and terminates when it's below a threshold (for example all
-	// points < 0.5px error).
-	class TerminationCheckingCallback : public ceres::IterationCallback {
-	public:
-		TerminationCheckingCallback(const Mat &x1, const Mat &x2,
-			const EstimateHomographyOptions &options,
-			Mat3 *H)
-			: options_(options), x1_(x1), x2_(x2), H_(H) {}
-
-		virtual ceres::CallbackReturnType operator()(
-			const ceres::IterationSummary& summary) {
-			// If the step wasn't successful, there's nothing to do.
-			if (!summary.step_is_successful) {
-				return ceres::SOLVER_CONTINUE;
-			}
-
-			// Calculate average of symmetric geometric distance.
-			double average_distance = 0.0;
-			for (int i = 0; i < x1_.cols(); i++) {
-				average_distance += SymmetricGeometricDistance(*H_,
-					x1_.col(i),
-					x2_.col(i));
-			}
-			average_distance /= x1_.cols();
-
-			if (average_distance <= options_.expected_average_symmetric_distance) {
-				return ceres::SOLVER_TERMINATE_SUCCESSFULLY;
-			}
-
-			return ceres::SOLVER_CONTINUE;
-		}
-
-	private:
-		const EstimateHomographyOptions &options_;
-		const Mat &x1_;
-		const Mat &x2_;
-		Mat3 *H_;
-	};
-	// Cost functor which computes symmetric geometric distance
-	// used for homography matrix refinement.
-	class HomographySymmetricGeometricCostFunctor {
-	public:
-		HomographySymmetricGeometricCostFunctor(const Vec2 &x,
-			const Vec2 &y)
-			: x_(x), y_(y) { }
-
-		template<typename T>
-		bool operator()(const T* homography_parameters, T* residuals) const {
-			typedef Eigen::Matrix<T, 3, 3> Mat3;
-			typedef Eigen::Matrix<T, 2, 1> Vec2;
-
-			Mat3 H(homography_parameters);
-			Vec2 x(T(x_(0)), T(x_(1)));
-			Vec2 y(T(y_(0)), T(y_(1)));
-
-			SymmetricGeometricDistanceTerms<T>(H,
-				x,
-				y,
-				&residuals[0],
-				&residuals[2]);
-			return true;
-		}
-
-		const Vec2 x_;
-		const Vec2 y_;
-	};
-	
-
+//	
+//	struct EstimateHomographyOptions {
+//		// Default settings for homography estimation which should be suitable
+//		// for a wide range of use cases.
+//		EstimateHomographyOptions()
+//			: max_num_iterations(50),
+//			expected_average_symmetric_distance(1e-16) {}
+//
+//		// Maximal number of iterations for the refinement step.
+//		int max_num_iterations;
+//
+//		// Expected average of symmetric geometric distance between
+//		// actual destination points and original ones transformed by
+//		// estimated homography matrix.
+//		//
+//		// Refinement will finish as soon as average of symmetric
+//		// geometric distance is less or equal to this value.
+//		//
+//		// This distance is measured in the same units as input points are.
+//		double expected_average_symmetric_distance;
+//	};
+//	
+//
+//	// Termination checking callback. This is needed to finish the
+//	// optimization when an absolute error threshold is met, as opposed
+//	// to Ceres's function_tolerance, which provides for finishing when
+//	// successful steps reduce the cost function by a fractional amount.
+//	// In this case, the callback checks for the absolute average reprojection
+//	// error and terminates when it's below a threshold (for example all
+//	// points < 0.5px error).
+//	class TerminationCheckingCallback : public ceres::IterationCallback {
+//	public:
+//		TerminationCheckingCallback(const Mat &x1, const Mat &x2,
+//			const EstimateHomographyOptions &options,
+//			Mat3 *H)
+//			: options_(options), x1_(x1), x2_(x2), H_(H) {}
+//
+//		virtual ceres::CallbackReturnType operator()(
+//			const ceres::IterationSummary& summary) {
+//			// If the step wasn't successful, there's nothing to do.
+//			if (!summary.step_is_successful) {
+//				return ceres::SOLVER_CONTINUE;
+//			}
+//
+//			// Calculate average of symmetric geometric distance.
+//			double average_distance = 0.0;
+//			for (int i = 0; i < x1_.cols(); i++) {
+//				average_distance += SymmetricGeometricDistance(*H_,
+//					x1_.col(i),
+//					x2_.col(i));
+//			}
+//			average_distance /= x1_.cols();
+//
+//			if (average_distance <= options_.expected_average_symmetric_distance) {
+//				return ceres::SOLVER_TERMINATE_SUCCESSFULLY;
+//			}
+//
+//			return ceres::SOLVER_CONTINUE;
+//		}
+//
+//	private:
+//		const EstimateHomographyOptions &options_;
+//		const Mat &x1_;
+//		const Mat &x2_;
+//		Mat3 *H_;
+//	};
+//	// Cost functor which computes symmetric geometric distance
+//	// used for homography matrix refinement.
+//	class HomographySymmetricGeometricCostFunctor {
+//	public:
+//		HomographySymmetricGeometricCostFunctor(const Vec2 &x,
+//			const Vec2 &y)
+//			: x_(x), y_(y) { }
+//
+//		template<typename T>
+//		bool operator()(const T* homography_parameters, T* residuals) const {
+//			typedef Eigen::Matrix<T, 3, 3> Mat3;
+//			typedef Eigen::Matrix<T, 2, 1> Vec2;
+//
+//			Mat3 H(homography_parameters);
+//			Vec2 x(T(x_(0)), T(x_(1)));
+//			Vec2 y(T(y_(0)), T(y_(1)));
+//
+//			SymmetricGeometricDistanceTerms<T>(H,
+//				x,
+//				y,
+//				&residuals[0],
+//				&residuals[2]);
+//			return true;
+//		}
+//
+//		const Vec2 x_;
+//		const Vec2 y_;
+//	};
+//	
+//
 private:
 
 	std::vector<std::vector<cv::Point2f>> _imgs_pts;
 	std::vector<std::vector<cv::Point2f>> _boards_pts;
 
+	NonlinearOptimizer optimier;
 	bool _b_disp_corners = false;
 };
 
