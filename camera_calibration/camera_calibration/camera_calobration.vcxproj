@@ -22,6 +22,7 @@
     <ProjectGuid>{BE8C29FF-988A-40DF-AE37-440810A68AB1}</ProjectGuid>
     <RootNamespace>camera_calobration</RootNamespace>
     <WindowsTargetPlatformVersion>8.1</WindowsTargetPlatformVersion>
+    <ProjectName>camera_calibration</ProjectName>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'" Label="Configuration">
@@ -66,12 +67,12 @@
   </ImportGroup>
   <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
-    <Import Project="..\..\props\console_debug_release_x64 .props" />
     <Import Project="..\..\props\ceres_release_x64.props" />
-    <Import Project="..\..\props\opencv330_release_x64.props" />
+    <Import Project="..\..\props\opencv412_release_x64.props" />
     <Import Project="..\..\props\glog_release_x64.props" />
     <Import Project="..\..\props\eigen3.props" />
-    <Import Project="..\..\props\gflags.props" />
+    <Import Project="..\..\..\..\..\..\..\dependency\gflags_x64_release.props" />
+    <Import Project="..\..\props\console_debug_release_x64 .props" />
   </ImportGroup>
   <PropertyGroup Label="UserMacros" />
   <PropertyGroup />
@@ -117,12 +118,12 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClInclude Include="..\..\modules\class_camera_calibrator.hpp" />
+    <ClInclude Include="..\..\modules\class_nonlinear_optimizer.hpp" />
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="..\..\samples\libmv_homography.cc">
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
+    <ClCompile Include="..\..\samples\main.cpp">
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">false</ExcludedFromBuild>
     </ClCompile>
-    <ClCompile Include="..\..\samples\main.cpp" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
