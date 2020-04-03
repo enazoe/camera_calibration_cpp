@@ -8,11 +8,6 @@
 #include <opencv2/imgproc/imgproc.hpp>
 //#include <Eigen/Dense>
 
-#ifdef _MSC_VER
-#define GLOG_NO_ABBREVIATED_SEVERITIES
-#include <windows.h>
-#endif
-
 #include <gflags/gflags.h>
 #include <glog/logging.h>
 #include <ceres/ceres.h>
