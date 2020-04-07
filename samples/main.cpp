@@ -5,7 +5,7 @@
 int main()
 {
 	std::vector<cv::String> images;
-	cv::glob("./data/*.jpg", images);
+	cv::glob("../../images/*.jpg", images);
 	std::vector<cv::Mat> vec_mat;
 	for (const auto &path:images)
 	{

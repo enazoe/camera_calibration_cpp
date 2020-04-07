@@ -3,59 +3,12 @@
 
 #include <vector>
 #include <opencv2/opencv.hpp>
-#include <opencv2/calib3d/calib3d.hpp>
-#include <opencv2/highgui/highgui.hpp>
-#include <opencv2/imgproc/imgproc.hpp>
-//#include <Eigen/Dense>
-
 #include <gflags/gflags.h>
 #include <glog/logging.h>
 #include <ceres/ceres.h>
 
 #include "class_nonlinear_optimizer.hpp"
-//typedef Eigen::MatrixXd Mat;
-//typedef Eigen::VectorXd Vec;
-//typedef Eigen::Matrix<double, 3, 3> Mat3;
-//typedef Eigen::Matrix<double, 2, 1> Vec2;
-//typedef Eigen::Matrix<double, Eigen::Dynamic, 8> MatX8;
-//typedef Eigen::Vector3d Vec3;
-//template <typename T>
-//void SymmetricGeometricDistanceTerms(const Eigen::Matrix<T, 3, 3> &H,
-//	const Eigen::Matrix<T, 2, 1> &x1,
-//	const Eigen::Matrix<T, 2, 1> &x2,
-//	T forward_error[2],
-//	T backward_error[2]) {
-//	typedef Eigen::Matrix<T, 3, 1> Vec3;
-//	Vec3 x(x1(0), x1(1), T(1.0));
-//	Vec3 y(x2(0), x2(1), T(1.0));
-//
-//	Vec3 H_x = H * x;
-//	Vec3 Hinv_y = H.inverse() * y;
-//
-//	H_x /= H_x(2);
-//	Hinv_y /= Hinv_y(2);
-//
-//	forward_error[0] = H_x(0) - y(0);
-//	forward_error[1] = H_x(1) - y(1);
-//	backward_error[0] = Hinv_y(0) - x(0);
-//	backward_error[1] = Hinv_y(1) - x(1);
-//}
-//// Calculate symmetric geometric cost:
-////
-////   D(H * x1, x2)^2 + D(H^-1 * x2, x1)^2
-////
-//double SymmetricGeometricDistance(const Mat3 &H,
-//	const Vec2 &x1,
-//	const Vec2 &x2) {
-//	Vec2 forward_error, backward_error;
-//	SymmetricGeometricDistanceTerms<double>(H,
-//		x1,
-//		x2,
-//		forward_error.data(),
-//		backward_error.data());
-//	return forward_error.squaredNorm() +
-//		backward_error.squaredNorm();
-//}
+
 class CameraCalibrator
 {
 public:
@@ -267,7 +220,6 @@ private:
 		DLOG(INFO) << "rough camera_matrix :\n" << camera_matrix_ << std::endl;
 	}
 
-
 	void get_homography(std::vector<Eigen::Matrix3d> &vec_h_)
 	{
 		vec_h_.clear();
@@ -354,168 +306,13 @@ private:
 			0, 0, 1;
 	}
 
-	//根据投影误差，LM算法对H进行优化
-	//void refine_H(const std::vector<cv::Point2f> &img_pts_,
-	//			  const std::vector<cv::Point2f> &board_pts_,
-	//			  const Eigen::Matrix3d &matrix_H_,
-	//			  Eigen::Matrix3d &refined_H_)
-	//{
-	//	Mat x1(2, board_pts_.size());
-	//	Mat x2(2, img_pts_.size());
-
-	//	for (int i=0;i<board_pts_.size();++i)
-	//	{
-	//		x1(0, i) = board_pts_[i].x;
-	//		x1(1, i) = board_pts_[i].y;
-	//	}
-	//	for (int i = 0; i < img_pts_.size(); ++i)
-	//	{
-	//		x2(0, i) = img_pts_[i].x;
-	//		x2(1, i) = img_pts_[i].y;
-	//	}
-
-	//	
-	//	Mat3 H = matrix_H_;
-	//	//std::cout << "H:" << H<< std::endl;
-	//	// Step 2: Refine matrix using Ceres minimizer.
-	//	ceres::Problem problem;
-	//	for (int i = 0; i < x1.cols(); i++) {
-	//		HomographySymmetricGeometricCostFunctor
-	//			*homography_symmetric_geometric_cost_function =
-	//			new HomographySymmetricGeometricCostFunctor(x1.col(i),
-	//				x2.col(i));
-
-	//		problem.AddResidualBlock(
-	//			new ceres::AutoDiffCostFunction<
-	//			HomographySymmetricGeometricCostFunctor,
-	//			4,  // num_residuals
-	//			9>(homography_symmetric_geometric_cost_function),
-	//			NULL,
-	//			H.data());
-	//	}
-	//	EstimateHomographyOptions options;
-	//	options.expected_average_symmetric_distance = 0.02;
-	//	// Configure the solve.
-	//	ceres::Solver::Options solver_options;
-	//	solver_options.linear_solver_type = ceres::DENSE_QR;
-	//	solver_options.max_num_iterations = options.max_num_iterations;
-	//	solver_options.update_state_every_iteration = true;
-
-	//	// Terminate if the average symmetric distance is good enough.
-	//	TerminationCheckingCallback callback(x1, x2, options, &H);
-	//	solver_options.callbacks.push_back(&callback);
-
-	//	// Run the solve.
-	//	ceres::Solver::Summary summary;
-	//	ceres::Solve(solver_options, &problem, &summary);
-
-	//	refined_H_ = H / H(2, 2);
-	//}
-
-private:
-//	
-//	struct EstimateHomographyOptions {
-//		// Default settings for homography estimation which should be suitable
-//		// for a wide range of use cases.
-//		EstimateHomographyOptions()
-//			: max_num_iterations(50),
-//			expected_average_symmetric_distance(1e-16) {}
-//
-//		// Maximal number of iterations for the refinement step.
-//		int max_num_iterations;
-//
-//		// Expected average of symmetric geometric distance between
-//		// actual destination points and original ones transformed by
-//		// estimated homography matrix.
-//		//
-//		// Refinement will finish as soon as average of symmetric
-//		// geometric distance is less or equal to this value.
-//		//
-//		// This distance is measured in the same units as input points are.
-//		double expected_average_symmetric_distance;
-//	};
-//	
-//
-//	// Termination checking callback. This is needed to finish the
-//	// optimization when an absolute error threshold is met, as opposed
-//	// to Ceres's function_tolerance, which provides for finishing when
-//	// successful steps reduce the cost function by a fractional amount.
-//	// In this case, the callback checks for the absolute average reprojection
-//	// error and terminates when it's below a threshold (for example all
-//	// points < 0.5px error).
-//	class TerminationCheckingCallback : public ceres::IterationCallback {
-//	public:
-//		TerminationCheckingCallback(const Mat &x1, const Mat &x2,
-//			const EstimateHomographyOptions &options,
-//			Mat3 *H)
-//			: options_(options), x1_(x1), x2_(x2), H_(H) {}
-//
-//		virtual ceres::CallbackReturnType operator()(
-//			const ceres::IterationSummary& summary) {
-//			// If the step wasn't successful, there's nothing to do.
-//			if (!summary.step_is_successful) {
-//				return ceres::SOLVER_CONTINUE;
-//			}
-//
-//			// Calculate average of symmetric geometric distance.
-//			double average_distance = 0.0;
-//			for (int i = 0; i < x1_.cols(); i++) {
-//				average_distance += SymmetricGeometricDistance(*H_,
-//					x1_.col(i),
-//					x2_.col(i));
-//			}
-//			average_distance /= x1_.cols();
-//
-//			if (average_distance <= options_.expected_average_symmetric_distance) {
-//				return ceres::SOLVER_TERMINATE_SUCCESSFULLY;
-//			}
-//
-//			return ceres::SOLVER_CONTINUE;
-//		}
-//
-//	private:
-//		const EstimateHomographyOptions &options_;
-//		const Mat &x1_;
-//		const Mat &x2_;
-//		Mat3 *H_;
-//	};
-//	// Cost functor which computes symmetric geometric distance
-//	// used for homography matrix refinement.
-//	class HomographySymmetricGeometricCostFunctor {
-//	public:
-//		HomographySymmetricGeometricCostFunctor(const Vec2 &x,
-//			const Vec2 &y)
-//			: x_(x), y_(y) { }
-//
-//		template<typename T>
-//		bool operator()(const T* homography_parameters, T* residuals) const {
-//			typedef Eigen::Matrix<T, 3, 3> Mat3;
-//			typedef Eigen::Matrix<T, 2, 1> Vec2;
-//
-//			Mat3 H(homography_parameters);
-//			Vec2 x(T(x_(0)), T(x_(1)));
-//			Vec2 y(T(y_(0)), T(y_(1)));
-//
-//			SymmetricGeometricDistanceTerms<T>(H,
-//				x,
-//				y,
-//				&residuals[0],
-//				&residuals[2]);
-//			return true;
-//		}
-//
-//		const Vec2 x_;
-//		const Vec2 y_;
-//	};
-//	
-//
 private:
 
+	bool _b_disp_corners = false;
 	std::vector<std::vector<cv::Point2f>> _imgs_pts;
 	std::vector<std::vector<cv::Point2f>> _boards_pts;
 
 	NonlinearOptimizer optimier;
-	bool _b_disp_corners = false;
 };
 
 
