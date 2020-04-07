@@ -1,4 +1,4 @@
-# 一步步用c++实现相机标定（张氏标定法）
+# 相机标定原理与c++实现（张氏标定法）
 
 ## 前言
 
@@ -47,13 +47,13 @@ r_{31} & r_{32} & r_{33} & t_{z} \\
 \end{array}\right]}_W \cdot\left[\begin{array}{l}
 x_w \\
 y_w \\
-c_w \\
+z_w \\
 1
 \end{array}\right] \quad \cdots 式1$$
 
 $r_{3\times3}$为旋转矩阵，$t_{3\times1}$为平移向量。这个刚体变换矩阵$W$就是我们常说的相机外参，和相机本身没有太大关系。至此我们得到了世界坐标系到相机坐标系下的变换关系：
 $$P_c = W \cdot P_w$$
-
+本文中以标定版坐标系为世界坐标系，所以$z_w=0$,所以$W$的第三列可以省略，用更紧凑的形式表示。
 
 
 ### 相机坐标系 -> 理想无畸变的图像坐标系
@@ -204,12 +204,73 @@ z_{w} \\
 
 ## 标定过程
 
-我们已经了解了相机投影模型，下面我们来看下怎么对未知参数进行标定。首先我们用相机采集不同姿态标定板的图像，标定板上带有明显视觉特征点。其中我们以标定板左上角角点为原点，垂直于标定板平面方向为z轴，建立世界坐标系，这样我们就能得到特征点在世界坐标系下的坐标和其在像素坐标系下的坐标。整个过程可分为五部分：
+我们已经了解了相机投影模型，下面我们来看下怎么对未知参数进行标定。首先我们用相机采集不同姿态标定板的图像，标定板上带有明显视觉特征点。其中我们以标定板左上角角点为原点，垂直于标定板平面方向为z轴，建立世界坐标系，这样我们就能得到特征点在世界坐标系下的坐标和其在像素坐标系下的坐标。整个过程可分为五部分。
 
-### 求单映性矩阵（homography）
+#### 1. 求单映性矩阵（homography）
 
-单映性举证
+单映性矩阵用来描述两个平面上的点的映射关系，结合前文提到的图像坐标系到像素坐标系的映射关系，我们有：
+
+$$
+\left[\begin{array}{l}
+u \\
+v \\
+1
+\end{array}\right] =
+\lambda
+\underbrace{\left[\begin{array}{lll}
+f\cdot s_{x} & 0 & u_c \\
+0 & f\cdotp s_{y} & v_c \\
+0 & 0 & 1
+\end{array}\right]}_A\left[\begin{array}{lll}
+r_{11} & r_{12} & t_x \\
+r_{21} & r_{22} & t_y \\
+r_{31} & r_{32} & t_z \\
+\end{array}\right]\left[\begin{array}{l}
+x_w \\
+y_w \\
+1
+\end{array}\right]
+$$
+设$H=\left[h1,h2,h3\right]=\lambda\cdotp A\cdot[r_1,r_2,t]$，因为H为3x3矩阵，且参与计算的坐标为其次坐标，所以H有八个自由度，所以一个点对对应两个方程，所以大斯鱼等于四个点即可计算出H矩阵。标定版的特征点一般大于四个，有利于H的优化和数值的稳定；求解H一般情况下使用normalized DLT 算法[1][2]；每个姿态的图像都能计算出一个单映性矩阵，我们可以用已知的点对对H进一步优化，本文使用ceres[4]非线性优化库进行求解。
+
+```c++
+void get_homography(std::vector<Eigen::Matrix3d> &vec_h_)
+{
+    vec_h_.clear();
+    for (int i=0;i<_imgs_pts.size();++i)
+    {
+        Eigen::Matrix3d ini_H,refined_H;
+        estimate_H(_imgs_pts[i], _boards_pts[i], ini_H);
+        optimier.refine_H(_imgs_pts[i], _boards_pts[i], ini_H,refined_H);
+        vec_h_.push_back(refined_H);
+    }
+}
+```
+#### 2.计算内参矩阵 
+H已知，H可以分解为下式：
+$h_1=\lambda \cdot A \cdot r_1 \Rightarrow r_1=s\cdot A^{-1}\cdot h_1$
+$h_2=\lambda \cdot A \cdot r_2 \Rightarrow r_2=s\cdot A^{-1}\cdot h_2$
+$h_3=\lambda \cdot A \cdot t \Rightarrow t=s\cdot A^{-1}\cdot h_3$
+
+由于$r_1,r_2$为旋转矩阵的两列，所以可以引入两个约束：
+- $r_1,r_2$正交:$r_1^T\cdot r_2=r_2^T\cdot r_1=0$
+- $r_1,r_2$的模为1:$|r_1|=|r_2|=1$
+
+用h的展开式替换约束条件中的h：
+
+- $r_1^{T}\cdot r_2=h_{1}^{T}\left(A^{-1}\right)^{T} A^{-1} h_{2}=0$
+- $h_{1}^{T}\left(A^{-1}\right)^{T} A^{-1} h_{1}=h_{2}^{T}\left(A^{-1}\right)^{T} A^{-1} h_{2}$
+
+
+#### 3.计算外参矩阵 
+
+#### 4.计算畸变参数
+
+#### 5.优化所有参数
 
 ## 参考文献
 
 [1] Burger, Wilhelm. "Zhang’s camera calibration algorithm: in-depth tutorial and implementation." Hagenberg, Austria (2016).
+[2] 多视角几何
+[3] https://zhuanlan.zhihu.com/p/24651968
+[4] http://ceres-solver.org/index.html
