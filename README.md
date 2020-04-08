@@ -183,18 +183,8 @@ f & 0 & 0 \\
 0 & 0 & 1
 \end{array}\right)}_{\mathbf{M}_{f}}}_A \cdot 
 \operatorname{warp}(\boldsymbol{x}, \boldsymbol{k}, \boldsymbol{p})\cdot
-\underbrace{\left(\begin{array}{llll}
-1 & 0 & 0 & 0 \\
-0 & 1 & 0 & 0 \\
-0 & 0 & 1 & 0
-\end{array}\right)}_{\mathbf{M}_{0}}\cdot
-
-\underbrace{\left[\begin{array}{cccc}
-r_{11} & r_{12} & r_{13} & t_{x} \\
-r_{21} & r_{22} & r_{23} & t_{y} \\
-r_{31} & r_{32} & r_{33} & t_{z} \\
-0 & 0 & 0 & 1
-\end{array}\right]}_{W} \cdot\left[\begin{array}{l}
+M_0\cdot
+W \cdot\left[\begin{array}{l}
 x_{w} \\
 y_{w} \\
 z_{w} \\
@@ -244,19 +234,7 @@ y_w \\
 $$
 设$H=\left[h1,h2,h3\right]=\lambda\cdotp A\cdot[r_1,r_2,t]$，因为H为3x3矩阵，且参与计算的坐标为其次坐标，所以H有八个自由度，所以一个点对对应两个方程，所以大斯鱼等于四个点即可计算出H矩阵。标定版的特征点一般大于四个，有利于H的优化和数值的稳定；求解H一般情况下使用normalized DLT 算法[1][2]；每个姿态的图像都能计算出一个单映性矩阵，我们可以用已知的点对对H进一步优化，本文使用ceres[4]非线性优化库进行求解。
 
-```c++
-void get_homography(std::vector<Eigen::Matrix3d> &vec_h_)
-{
-    vec_h_.clear();
-    for (int i=0;i<_imgs_pts.size();++i)
-    {
-        Eigen::Matrix3d ini_H,refined_H;
-        estimate_H(_imgs_pts[i], _boards_pts[i], ini_H);
-        optimier.refine_H(_imgs_pts[i], _boards_pts[i], ini_H,refined_H);
-        vec_h_.push_back(refined_H);
-    }
-}
-```
+
 #### 2.计算内参矩阵 
 H已知，H可以分解为下式：
 $h_1=\lambda \cdot A \cdot r_1 \Rightarrow r_1=s\cdot A^{-1}\cdot h_1$
@@ -269,8 +247,10 @@ $h_3=\lambda \cdot A \cdot t \Rightarrow t=s\cdot A^{-1}\cdot h_3$
 
 用h的展开式替换约束条件中的h：
 
-- $r_1^{T}\cdot r_2=h_{1}^{T}\left(A^{-1}\right)^{T} A^{-1} h_{2}=0$
-- $h_{1}^{T}\left(A^{-1}\right)^{T} A^{-1} h_{1}=h_{2}^{T}\left(A^{-1}\right)^{T} A^{-1} h_{2}$
+$$\begin{aligned}
+&r_{1}^{T} \cdot r_{2}=h_{1}^{T}\left(A^{-1}\right)^{T} A^{-1} h_{2}=0\\
+&h_{1}^{T}\left(A^{-1}\right)^{T} A^{-1} h_{1}=h_{2}^{T}\left(A^{-1}\right)^{T} A^{-1} h_{2}
+\end{aligned}$$
 
 令
 $$
@@ -318,39 +298,7 @@ $$\begin{array}{l}
 w=B_{0} B_{2} B_{5}-B_{1}^{2} B_{5}-B_{0} B_{4}^{2}+2 B_{1} B_{3} B_{4}-B_{2} B_{3}^{2} \\
 d=B_{0} B_{2}-B_{1}^{2}
 \end{array}$$
-```c++
-void get_camera_instrinsics(const std::vector<Eigen::Matrix3d> &vec_h_,
-								Eigen::Matrix3d &camera_matrix_)
-{
-	int N = vec_h_.size();
-	Eigen::MatrixXd V(2 * N, 6);
-	V.setZero();
 
-	for (int n = 0; n < N; ++n)
-	{
-		Eigen::RowVectorXd v01(6),v00(6), v11(6);
-		create_v(vec_h_[n], 0, 1, v01);
-		V.row(2*n) = v01;
-		create_v(vec_h_[n], 0, 0, v00);
-		create_v(vec_h_[n], 1, 1, v11);
-		V.row(2*n + 1) = v00 - v11;
-	}
-	Eigen::JacobiSVD<Eigen::MatrixXd> svd(V, Eigen::ComputeFullV);
-	Eigen::VectorXd b = svd.matrixV().col(5);
-	double	w = b[0] * b[2] * b[5] - b[1] * b[1] * b[5] - b[0] * b[4] *
-     b[4] + 2 * b[1] * b[3] * b[4] - b[2] * b[3] * b[3];
-	double	d = b[0] * b[2] - b[1] * b[1];
-	double	alpha = std::sqrt(w / (d * b[0]));
-	double	beta = std::sqrt(w / (d*d) * b[0]);
-	double	gamma = std::sqrt(w / (d*d * b[0])) * b[1];
-	double	uc = (b[1] * b[4] - b[2] * b[3]) / d;
-	double	vc = (b[1] * b[3] - b[0] * b[4]) / d;
-
-	camera_matrix_ << alpha, gamma, uc,
-			0, beta, vc,
-			0, 0, 1;
-}
-```
 #### 3.计算外参矩阵 
 上面我们计算出了内参矩阵$A$,和单映性矩阵$H$,所以我们可以得到：
 $$
