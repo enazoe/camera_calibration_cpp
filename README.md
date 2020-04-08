@@ -1,5 +1,6 @@
 # 相机标定原理与c++实现（张氏标定法）
 
+https://github.com/enazoe/camera_calibration_cpp
 ## 前言
 
 最近在做相机标定方面的工作，虽然以前多次进行相机标定，但是多数时候是调用opencv的函数，过程相对简单。虽然对标定过程有一定的了解，但是掌握的不是很扎实，所以趁这次机会，对相机标定过程做了一下深入的了解，并且用c++重新实现了下整个标定过程（opencv 中有源码，但是有点乱我没太看懂，有可能我比较渣渣），所以这是篇学习笔记。其中有些自己的理解，所以难免有错误的地方，还望指正，抱拳。
@@ -172,7 +173,7 @@ v \\
 1
 \end{array}\right]=
 \underbrace{\left[\begin{array}{lll}
-s_{x} & 0 & u_{c} \\
+s_{x} & s_{\theta} & u_{c} \\
 0 & s_{y} & v_{c} \\
 0 & 0 & 1
 \end{array}\right] 
@@ -200,6 +201,16 @@ z_{w} \\
 1
 \end{array}\right]$$
 
+其中：
+$$\mathbf{A}=\left(\begin{array}{ccc}
+f s_{x} & f s_{\theta} & u_{c} \\
+0 & f s_{y} & v_{c} \\
+0 & 0 & 1
+\end{array}\right)=\left(\begin{array}{ccc}
+\alpha & \gamma & u_{c} \\
+0 & \beta & v_{c} \\
+0 & 0 & 1
+\end{array}\right)$$
 上式中不是严格的矩阵乘法，其中涉及极坐标化等。其中$A$即为内参矩阵，$k,p$为畸变系数，$W$为外参。
 
 ## 标定过程
@@ -218,7 +229,7 @@ v \\
 \end{array}\right] =
 \lambda
 \underbrace{\left[\begin{array}{lll}
-f\cdot s_{x} & 0 & u_c \\
+f\cdot s_{x} & f\cdot s_{\theta} & u_c \\
 0 & f\cdotp s_{y} & v_c \\
 0 & 0 & 1
 \end{array}\right]}_A\left[\begin{array}{lll}
@@ -252,7 +263,7 @@ $h_1=\lambda \cdot A \cdot r_1 \Rightarrow r_1=s\cdot A^{-1}\cdot h_1$
 $h_2=\lambda \cdot A \cdot r_2 \Rightarrow r_2=s\cdot A^{-1}\cdot h_2$
 $h_3=\lambda \cdot A \cdot t \Rightarrow t=s\cdot A^{-1}\cdot h_3$
 
-由于$r_1,r_2$为旋转矩阵的两列，所以可以引入两个约束：
+由于$r_1$,$r_2$为旋转矩阵的两列，所以可以引入两个约束：
 - $r_1,r_2$正交:$r_1^T\cdot r_2=r_2^T\cdot r_1=0$
 - $r_1,r_2$的模为1:$|r_1|=|r_2|=1$
 
@@ -261,16 +272,140 @@ $h_3=\lambda \cdot A \cdot t \Rightarrow t=s\cdot A^{-1}\cdot h_3$
 - $r_1^{T}\cdot r_2=h_{1}^{T}\left(A^{-1}\right)^{T} A^{-1} h_{2}=0$
 - $h_{1}^{T}\left(A^{-1}\right)^{T} A^{-1} h_{1}=h_{2}^{T}\left(A^{-1}\right)^{T} A^{-1} h_{2}$
 
+令
+$$
+\mathbf{B}=\left(\mathbf{A}^{-1}\right)^{\top} \cdot \mathbf{A}^{-1}=\left(\begin{array}{lll}B_{0} & B_{1} & B_{3} \\ B_{1} & B_{2} & B_{4} \\ B_{3} & B_{4} & B_{5}\end{array}\right)$$
 
+根据上文得到的$A$，展开$B$可知$B$为对称矩阵，且两个约束条件可变为：
+$$\begin{array}{l}
+\boldsymbol{h}_{0}^{\top} \cdot \mathbf{B} \cdot \boldsymbol{h}_{1}=0 \\
+\boldsymbol{h}_{0}^{\top} \cdot \mathbf{B} \cdot \boldsymbol{h}_{0}-\boldsymbol{h}_{1}^{\top} \cdot \mathbf{B} \cdot \boldsymbol{h}_{1}=0
+\end{array}$$
+下面我们用一个六维的向量$b$对$B$进行表示：
+$$\boldsymbol{b}=\left(B_{0}, B_{1}, B_{2}, B_{3}, B_{4}, B_{5}\right)$$
+对约束条件完全展开可以得到：
+$$\boldsymbol{h}_{p}^{\top} \cdot \mathbf{B} \cdot \boldsymbol{h}_{q}=\boldsymbol{v}_{p, q}(\mathbf{H}) \cdot \boldsymbol{b}$$
+其中：
+$$\boldsymbol{v}_{p, q}(\mathbf{H})=\left(\begin{array}{c}
+H_{0, p} \cdot H_{0, q} \\
+H_{0, p} \cdot H_{1, q}+H_{1, p} \cdot H_{0, q} \\
+H_{1, p} \cdot H_{1, q} \\
+H_{2, p} \cdot H_{0, q}+H_{0, p} \cdot H_{2, q} \\
+H_{2, p} \cdot H_{1, q}+H_{1, p} \cdot H_{2, q} \\
+H_{2, p} \cdot H_{2, q}
+\end{array}\right)$$
+
+所以，我们的约束条件变为：
+$$\left(\begin{array}{c}
+\boldsymbol{v}_{0,1}(\mathbf{H}) \\
+\boldsymbol{v}_{0,0}(\mathbf{H})-\boldsymbol{v}_{1,1}(\mathbf{H})
+\end{array}\right) \cdot \boldsymbol{b}=\left(\begin{array}{l}
+0 \\
+0
+\end{array}\right ) \text{or}\mathbf{V} \cdot \mathbf{b}=\mathbf{0}$$
+$b$为六维向量，我们想解出$b$需要至少六个方程，现在一个视角下的$H$对应两个方程，所以如果我们有大于等于三个视角的数据，就可以解出$b$,本文的c++实现采用svd求解$\mathbf{V} \cdot \mathbf{b}=\mathbf{0}$。
+
+因为$B$为内参矩阵$A$计算得来，通过cholesky分解，可得到$A$的闭式解：
+$$\begin{aligned}
+\alpha &=\sqrt{w /\left(d \cdot B_{0}\right)} \\
+\beta &=\sqrt{w / d^{2} \cdot B_{0}} \\
+\gamma &=\sqrt{w /\left(d^{2} \cdot B_{0}\right)} \cdot B_{1} \\
+u_{c} &=\left(B_{1} B_{4}-B_{2} B_{3}\right) / d \\
+v_{c} &=\left(B_{1} B_{3}-B_{0} B_{4}\right) / d
+\end{aligned}$$
+其中，
+$$\begin{array}{l}
+w=B_{0} B_{2} B_{5}-B_{1}^{2} B_{5}-B_{0} B_{4}^{2}+2 B_{1} B_{3} B_{4}-B_{2} B_{3}^{2} \\
+d=B_{0} B_{2}-B_{1}^{2}
+\end{array}$$
+```c++
+void get_camera_instrinsics(const std::vector<Eigen::Matrix3d> &vec_h_,
+								Eigen::Matrix3d &camera_matrix_)
+{
+	int N = vec_h_.size();
+	Eigen::MatrixXd V(2 * N, 6);
+	V.setZero();
+
+	for (int n = 0; n < N; ++n)
+	{
+		Eigen::RowVectorXd v01(6),v00(6), v11(6);
+		create_v(vec_h_[n], 0, 1, v01);
+		V.row(2*n) = v01;
+		create_v(vec_h_[n], 0, 0, v00);
+		create_v(vec_h_[n], 1, 1, v11);
+		V.row(2*n + 1) = v00 - v11;
+	}
+	Eigen::JacobiSVD<Eigen::MatrixXd> svd(V, Eigen::ComputeFullV);
+	Eigen::VectorXd b = svd.matrixV().col(5);
+	double	w = b[0] * b[2] * b[5] - b[1] * b[1] * b[5] - b[0] * b[4] *
+     b[4] + 2 * b[1] * b[3] * b[4] - b[2] * b[3] * b[3];
+	double	d = b[0] * b[2] - b[1] * b[1];
+	double	alpha = std::sqrt(w / (d * b[0]));
+	double	beta = std::sqrt(w / (d*d) * b[0]);
+	double	gamma = std::sqrt(w / (d*d * b[0])) * b[1];
+	double	uc = (b[1] * b[4] - b[2] * b[3]) / d;
+	double	vc = (b[1] * b[3] - b[0] * b[4]) / d;
+
+	camera_matrix_ << alpha, gamma, uc,
+			0, beta, vc,
+			0, 0, 1;
+}
+```
 #### 3.计算外参矩阵 
+上面我们计算出了内参矩阵$A$,和单映性矩阵$H$,所以我们可以得到：
+$$
+\begin{aligned}
+ r_0 &=\lambda \cdot A^{-1}\cdot h_0\\
+ r_1 &=\lambda \cdot A^{-1}\cdot h_1 \\
+ t &=\lambda \cdot A^{-1}\cdot h_2 \\
+\end{aligned}
+$$
+其中，$r$为旋转矩阵的向量，所以列向量正交且模为1，所以：
+$$\lambda=\frac{1}{\left\|\mathbf{A}^{-1} \cdot h_{0}\right\|}=\frac{1}{\left\|\mathbf{A}^{-1} \cdot h_{1}\right\|}$$
+$$\boldsymbol{r}_{2}=\boldsymbol{r}_{0} \times \boldsymbol{r}_{1}$$
 
 #### 4.计算畸变参数
+本文对畸变参数的计算只考虑二元径向畸变的情况来介绍畸变参数的求解过程。畸变模型可以表示为：
+$$\tilde{\boldsymbol{x}}_{i}=\operatorname{warp}\left(\boldsymbol{x}_{i}, \boldsymbol{k}\right) = \boldsymbol{x}_{i} \cdot\left[1+D\left(\left\|\boldsymbol{x}_{i}\right\|, \boldsymbol{k}\right)\right]$$
+其中，$\tilde{\boldsymbol{x}}_i$为畸变后的点，$x_i$为未发生畸变的点
+$$D(r, \boldsymbol{k})=k_{0} \cdot r^{2}+k_{1} \cdot r^{4}=\boldsymbol{k} \cdot\left(\begin{array}{c}
+r^{2} \\
+r^{4}
+\end{array}\right)$$
+$$r_{i}=\left\|\boldsymbol{x}_{i}-\boldsymbol{x}_{c}\right\|=\left\|\boldsymbol{x}_{i}\right\|=\sqrt{x_{i}^{2}+y_{i}^{2}}$$
 
-#### 5.优化所有参数
+所以，我们可以对观察到的点进行建模：
+$$
+\tilde{\boldsymbol{u}}_{i, j}-\boldsymbol{u}_{c}=\left(\boldsymbol{u}_{i, j}-\boldsymbol{u}_{c}\right) \cdot\left[1+D\left(r_{i, j}, \boldsymbol{k}\right)\right]
+$$
+化简得到：
+$$
+\tilde{\boldsymbol{u}}_{i, j}-u_{i,j}=(u_{i,j}-u_c)\cdot D(r_{i,j},k)
+$$
+其中$\tilde{\boldsymbol{u}}_{i, j}$为观察到的畸变的像素坐标系下的坐标，$u_{i,j}$为理想无畸变下的像素坐标，$u_c$为投影中心。我们的目的是通过拟合畸变参数使我们计算的坐标无线逼近我们观察到的坐标，也就是上式最小化为0。所以你和畸变参数问题就变成了解方程组：
+$$\left(\begin{array}{cc}
+\left(\dot{u}_{i, j}-u_{c}\right) \cdot r_{i, j}^{2} & \left(\dot{u}_{i, j}-u_{c}\right) \cdot r_{i, j}^{4} \\
+\left(\dot{v}_{i, j}-v_{c}\right) \cdot r_{i, j}^{2} & \left(\dot{v}_{i, j}-v_{c}\right) \cdot r_{i, j}^{4}
+\end{array}\right) \cdot\left(\begin{array}{c}
+k_{0} \\
+k_{1}
+\end{array}\right)=\left(\begin{array}{c}
+\dot{u}_{i, j}-u_{i, j} \\
+\dot{v}_{i, j}-v_{i, j}
+\end{array}\right)$$
+可使用SVD，或者QR分解，对参数进行求解。
+#### 5.全局微调
+
+前面的步骤我们已经得到所有参数，包括内参，外参和畸变参数，但是这些值都是初值，我们需要利用所有数据对参数进行进一步优化。有话的方法是最小化投影误差，即计算到的点和观察到的点的偏差。因为这个过程中涉及到投影变换，畸变模型等，所以这是非线性优化问题，本文的实现使用ceres库对各参数进行优化。其中，将外参中的旋转矩阵转化为更为紧凑的旋转向量进行表示，降低优化难度。
+
+所有的c++实现可以在这里找到 https://github.com/enazoe/camera_calibration_cpp
 
 ## 参考文献
 
 [1] Burger, Wilhelm. "Zhang’s camera calibration algorithm: in-depth tutorial and implementation." Hagenberg, Austria (2016).
+
 [2] 多视角几何
+
 [3] https://zhuanlan.zhihu.com/p/24651968
+
 [4] http://ceres-solver.org/index.html
