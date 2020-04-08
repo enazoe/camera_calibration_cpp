@@ -9,7 +9,7 @@ int main()
 	std::vector<cv::Mat> vec_mat;
 	for (const auto &path:images)
 	{
-		cv::Mat img = cv::imread(path, cv::IMREAD_UNCHANGED);
+		cv::Mat img = cv::imread(path, cv::IMREAD_GRAYSCALE);
 		vec_mat.push_back(img);
 	}
 

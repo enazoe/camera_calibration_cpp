@@ -9,7 +9,6 @@ data/
 *.sdf
 *.opensdf
 *.exp
-*.jpg
 *.db
 *.ipdb
 *.dll
