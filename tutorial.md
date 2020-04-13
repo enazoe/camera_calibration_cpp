@@ -346,8 +346,28 @@ k_{1}
 
 前面的步骤我们已经得到所有参数，包括内参，外参和畸变参数，但是这些值都是初值，我们需要利用所有数据对参数进行进一步优化。有话的方法是最小化投影误差，即计算到的点和观察到的点的偏差。因为这个过程中涉及到投影变换，畸变模型等，所以这是非线性优化问题，本文的实现使用ceres库对各参数进行优化。其中，将外参中的旋转矩阵转化为更为紧凑的旋转向量进行表示，降低优化难度。
 
-所有的c++实现可以在这里找到 https://github.com/enazoe/camera_calibration_cpp
+## 结论
 
+相同样本图片的前提下，本文实现的相机标定结果为：
+$$
+\left[
+\begin{array}{lll}
+533.397 & 0.389316 & 342.54 \\
+0  &533.819 & 233.221\\
+0    &    0     &   1 \\
+\end{array}
+\right]
+$$
+opencv calibrateCamera 结果：
+$$
+\left[
+\begin{array}{lll}
+532.795  &      0 & 342.4584 \\
+    0 &532.919 &233.9011\\
+0    &    0     &   1 \\
+\end{array}
+\right]
+$$
 ## 参考文献
 
 [1] Burger, Wilhelm. "Zhang’s camera calibration algorithm: in-depth tutorial and implementation." Hagenberg, Austria (2016).
