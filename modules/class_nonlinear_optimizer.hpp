@@ -136,7 +136,8 @@ public:
 		//std::cout << "H:" << H<< std::endl;
 		// Step 2: Refine matrix using Ceres minimizer.
 		ceres::Problem problem;
-		for (int i = 0; i < x1.cols(); i++) {
+		for (int i = 0; i < x1.cols(); i++) 
+		{
 			HomographySymmetricGeometricCostFunctor
 				*homography_symmetric_geometric_cost_function =
 				new HomographySymmetricGeometricCostFunctor(x1.col(i),
@@ -235,7 +236,7 @@ public:
 		// Configure the solver.
 		ceres::Solver::Options options;
 		options.linear_solver_type = ceres::DENSE_SCHUR;
-		options.minimizer_progress_to_stdout = true;
+		options.minimizer_progress_to_stdout =false;
 
 		// Solve!
 		ceres::Solver::Summary summary;

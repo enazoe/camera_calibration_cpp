@@ -217,7 +217,6 @@ private:
 		camera_matrix_ << alpha, gamma, uc,
 			0, beta, vc,
 			0, 0, 1;
-		DLOG(INFO) << "rough camera_matrix :\n" << camera_matrix_ << std::endl;
 	}
 
 	void get_homography(std::vector<Eigen::Matrix3d> &vec_h_)
