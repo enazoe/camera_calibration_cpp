@@ -7,11 +7,11 @@ The implementation of camera calibration based on zhang's method.There is a chin
 
 ### Dependency
 
-- opencv(just get coners)
+- opencv(just get corners)
 - Eigen3
 - ceres
 
-If you want to build this project on windows, may be you can get the [windows-ceres](https://github.com/tbennun/ceres-windows) project.
+If you want to build this project on windows, you perhaps need [windows-ceres](https://github.com/tbennun/ceres-windows) project.
 
 ### Reference
 
